@@ -132,6 +132,24 @@ class slab:
         # downsample to grid
         self.downsample()
 
+    
+    def simulate_line_flux(self):
+        """
+        Simulate a convolved and downsampled spectrum of line fluxes (W/m2)
+        !! do i need to convolve and downsample?
+        Added by Emma 3/12/25
+        """
+        # generate flux at the wavelengths provided by hitran for the given species
+        self.flux_model = sp.compute_lineflux(self.catalog, self.distance, self.A_au, 
+                                                 self.T_ex, self.N_mol, self.dV, self.fine_wgrid)
+        
+        # convolve with instrument psf
+        self.convolve() # !! is this necessary or no? Or should we do this when we calculate the optical depth line profile?
+        # downsample to grid
+        #self.downsample() # here's where carlos's code downsamples to the right wavelength array. I don't think we'll need to do that? 
+        # !! Need to make a new downsample() that uses np.where to produce line fluxes? Or, the user can do that once the line fluxes are provided.
+        # routine is, slab.simulate_line_flux(), and then you can call slab.line_fluxes
+
     def simulate_keplerian(self):
         """
         Simulate a convolved and downsampled spectrum including Keplerian line profiles
