@@ -11,12 +11,12 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 import astropy.units as u
+#from astropy.constants import c,h, k_B, G, M_sun, au, pc, u # added by Emma. add into const later
 import astropy.constants as const
 import jax.numpy as jnp
 import numpy as np
 from functools import partial
 from jax.scipy.signal import fftconvolve
-from astropy.constants import c,h, k_B, G, M_sun, au, pc, u # added by Emma. add into const later
 
 # -------------------- Global constants ----------------------
 # for more efficient unit handling
@@ -287,7 +287,7 @@ compute_fdens = jax.jit(compute_fdens)
 
 
 
-def compute_lineflux(distance, fine_wgrid, tau_grid, A_au, t_ex):
+def compute_lineflux(distance, fine_wgrid, A_au, t_ex):
     '''
     compute_lineflux: get line flux for one species. Uses parts of compute_total_tau() to calculate flux here for each line
     
@@ -314,7 +314,7 @@ def compute_lineflux(distance, fine_wgrid, tau_grid, A_au, t_ex):
         # above should be compute_total_tau_lineflux, which retruns 
         
 
-        f_arr[i,:]=2*h.value*c.value*wn0[i]**3./(np.exp(wnfactor[i])-1.0e0)*(1-np.exp(-tau[i,:]))*si2jy*omega
+        f_arr[i,:]=2*const.h.value*const.c.value*wn0[i]**3./(np.exp(wnfactor[i])-1.0e0)*(1-np.exp(-tau[i,:]))*si2jy*omega
         # wno -> wavenumber at center of line
         # wnfactor=h.value*c.value*wn0/(k_B.value*temp)
         # si2jy=1e26   #SI to Jy flux conversion factor
