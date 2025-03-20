@@ -252,7 +252,7 @@ def compute_total_tau(catalog, fine_wgrid, dv, t_ex, n_mol):
 compute_total_tau = jax.jit(compute_total_tau)
 
 
-
+''' # I don't think we need to do this for line fluxes...? 
 def compute_total_tau_lineflux(catalog, fine_wgrid, dv, t_ex, n_mol):
     """
     compute_tau_grid: get optical depth profile for all molecules
@@ -274,7 +274,7 @@ def compute_total_tau_lineflux(catalog, fine_wgrid, dv, t_ex, n_mol):
         func = partial(compute_tau_grid_lineflux, catalog[keys[i]], fine_wgrid)
         total_tau_lineflux[i,:] = (jax.vmap(func)(dv[i], t_ex[i], n_mol[i]))
     return jnp.array(total_tau_lineflux)
-compute_total_tau_lineflux = jax.jit(compute_total_tau_lineflux)
+compute_total_tau_lineflux = jax.jit(compute_total_tau_lineflux)'''
 
 
 
