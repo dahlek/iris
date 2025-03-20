@@ -43,6 +43,8 @@ mp_cgs = const.m_p.cgs.value
 
 au_to_m = u.au.to(u.m)
 M_sun_to_kg = (u.M_sun).to(u.kg)
+# au^2 to m^2
+sq_au_to_sq_m = (u.au.to(u.m))**2 
 
 # ----------------------------------------------------------
 
@@ -173,7 +175,7 @@ def compute_tau_grid(line_catalog, fine_wgrid, dv, t_ex, n_mol):
     tau_grid = jax.vmap(func)(tau_cen, line_catalog['ws'])
     
     # sum opacities
-    return  jnp.sum(tau_grid, axis=0)
+    return  jnp.sum(tau_grid, axis=0) # sum taus along rows
 compute_tau_grid = jax.jit(compute_tau_grid)
 
 
@@ -202,14 +204,28 @@ def compute_tau_grid_lineflux(line_catalog, fine_wgrid, dv, t_ex, n_mol):
     tau_cen = tau_amp * tau_lvl
     # intrinsic width in micron
     sigma_lam = dv_to_dlam(dv/2.355, fine_wgrid)
+    # pull center wavenumber 
+    center_wn = 1e4/line_catalog['ws'] # central wavenumber
     # map over all lines
     func = partial(evaluate_line_tau, fine_wgrid, sigma_lam)
     tau_grid = jax.vmap(func)(tau_cen, line_catalog['ws'])
     
     # DON'T sum opacities
-    return  jnp.array(tau_grid)
+    return  jnp.array(tau_grid) # 2D (?) array w/ 1 row for each line for a given species, columns = fine_wgrid
 compute_tau_grid_lineflux = jax.jit(compute_tau_grid_lineflux)
 
+def central_wavenumber(line_catalog):
+    """
+    returns central wavenumber of lines.
+    
+    :line_catalog: HITRAN catalog 
+    
+    returns: center_wn, wavenumber in * m^-1 * at center of given line. wn0 from slabspec.
+    """
+    center_wn = 1e6/line_catalog['ws'] # wavenumber
+    return center_wn # 
+central_wavenumber = jax.jit(central_wavenumber)
+    
 
 
 def compute_total_tau(catalog, fine_wgrid, dv, t_ex, n_mol):
@@ -227,16 +243,13 @@ def compute_total_tau(catalog, fine_wgrid, dv, t_ex, n_mol):
     keys = list(catalog.keys())
     total_tau = []
     # loop over each species
-    for i in range(len(catalog)): # calculate the total optical depth for each line using compute_tau_grid()
+    for i in range(len(catalog)): # calculate the total optical depth for each molecule using compute_tau_grid()
         # map over disk grid
         func = partial(compute_tau_grid, catalog[keys[i]], fine_wgrid)
         total_tau.append(jax.vmap(func)(dv[i], t_ex[i], n_mol[i]))
     return jnp.array(total_tau)
 
 compute_total_tau = jax.jit(compute_total_tau)
-
-
-
 
 
 
@@ -251,19 +264,17 @@ def compute_total_tau_lineflux(catalog, fine_wgrid, dv, t_ex, n_mol):
     :t_ex: excitation temperature in K
     :n_mol: column density in cm^-2
     
-    returns: tau (unitless)
+    returns: array of tau profiles for each line. each row will be as large as fine_wgrid
     """
     keys = list(catalog.keys())
-    total_tau = np.zeros((len(catalog),len(fine_wgrid)))
+    total_tau_lineflux = jnp.zeros((len(catalog),len(fine_wgrid)))
     # loop over each species
     for i in range(len(catalog)):
         # map over disk grid
         func = partial(compute_tau_grid_lineflux, catalog[keys[i]], fine_wgrid)
-        total_tau[i,:] = (jax.vmap(func)(dv[i], t_ex[i], n_mol[i]))
+        total_tau_lineflux[i,:] = (jax.vmap(func)(dv[i], t_ex[i], n_mol[i]))
     return jnp.array(total_tau_lineflux)
-
 compute_total_tau_lineflux = jax.jit(compute_total_tau_lineflux)
-
 
 
 
@@ -287,46 +298,72 @@ compute_fdens = jax.jit(compute_fdens)
 
 
 
-def compute_lineflux(distance, fine_wgrid, A_au, t_ex):
+def compute_lineflux(catalog, distance, A_au, t_ex, n_mol, dv, fine_wgrid):
     '''
-    compute_lineflux: get line flux for one species. Uses parts of compute_total_tau() to calculate flux here for each line
-    
+    compute_lineflux: get line flux for the species within catalog. 
+    Uses parts of compute_total_tau() to calculate flux here for each line
+
+    :catalog: HITRAN catalogs
     :distance: distance to source in pc
-    :fine_wgrid: fine wavelength grid to evaluate tau 
-    :total_tau: tau as function of wavelength
     :A_au: emitting area in au^2
     :t_ex: excitation temperature in K
+    :n_mol: column density in cm^-2
+    :dv: intrinsic line FWHM in km/s
+    :fine_wgrid: fine wavelength grid to evaluate tau 
     
-    returns: integrated line flux (W m^-2)
+    returns: integrated line flux (W m^-2) for each line within user-defined wavelength range
     '''
     # !! add stuff here
     keys = list(catalog.keys())
-    total_tau = []
+    
     # make empty flux array that is number of lines by number of wavelengths. For each line, will insert flux
-    f_arr = jnp.zeros((len(catalog), len(fine_wgrid)))
-    lineflux = jnp.zeros(len(catalog))
+    #f_arr = jnp.zeros((len(catalog), len(fine_wgrid))) # commented out bc I think I should calculate a single f_arr for each species?
+    
+    lineflux = jnp.zeros((len(catalog),len(fine_wgrid))) # lineflux list for each species?
+    #func = partial(compute_tau_grid_lineflux, catalog, fine_wgrid)
+    #tau = jax.vmap(func)(dv, t_ex, n_mol) # grid of optical depth profiles
+
+    #tau = compute_tau_grid_lineflux(catalog[keys], fine_wgrid, dv, t_ex, n_mol) # grid of optical depth profiles
+    
+    #return jnp.array(tau)
+    
     # loop over each species
-    for i in range(len(catalog)):
+    for i in range(len(catalog)): 
+        #loop over lines?
+        #for j in range(len(catalog[keys[i]]['ws'])): 
+    
         # map over disk grid
         # find optical depth as a function of wavelength for that line (??? how to call function here)
-        func = partial(compute_tau_grid_lineflux, catalog[keys[i]], fine_wgrid)
-        total_tau_lineflux.append(jax.vmap(func)(dv[i], t_ex[i], n_mol[i]))
-        # above should be compute_total_tau_lineflux, which retruns 
-        
 
-        f_arr[i,:]=2*const.h.value*const.c.value*wn0[i]**3./(np.exp(wnfactor[i])-1.0e0)*(1-np.exp(-tau[i,:]))*si2jy*omega
-        # wno -> wavenumber at center of line
-        # wnfactor=h.value*c.value*wn0/(k_B.value*temp)
+        # calculate the wavelength-dependent tau profiles for each line for a given molecule
+        func = partial(compute_tau_grid_lineflux, catalog[keys[i]], fine_wgrid)
+        tau = jax.vmap(func)(dv[i], t_ex[i], n_mol[i]) # !! This appears to give me a tau of 0
+
+        # the follwing code/comments is based off of slabspec.py ~lines 276-278 and relevant variables
+        # wno -> wavenumber (m^-1) at center of line
+        # wnfactor=const.h.value*const.c.value*wn0/(const.k_B.value*t_ex[i])
         # si2jy=1e26   #SI to Jy flux conversion factor
-        # omega=area/(d_pc*pc.value)**2. # area is in m^2, so use A_au and convert to m^2 from au^2 # !! make sure pc.value works
+        # omega=area/(d_pc*const.pc.value)**2. # area is in m^2, so use A_au and convert to m^2 from au^2 # !! make sure pc.value works
         
-        lineflux_jykms=np.sum(f_arr[i,:])*dvel
+        wn0 = central_wavenumber(catalog[keys[i]]) # central wavenumbers for all lines
+        w0 = 1.0e6/wn0
+        wnfactor=const.h.value*const.c.value*wn0/(const.k_B.value*t_ex[i])
+        si2jy=1e26   #SI to Jy flux conversion factor
+        area=A_au*sq_au_to_sq_m # convert area in AU^2 to m^2
+        omega=area/(distance*const.pc.value)**2. 
+
+        #f_arr[i,:]=2*const.h.value*const.c.value*wn0**3./(jnp.exp(wnfactor)-1.0e0)*(1-jnp.exp(-tau))*si2jy*omega
+        f_arr=2*const.h.value*const.c.value*wn0**3./(jnp.exp(wnfactor)-1.0e0)*(1-jnp.exp(-tau))*si2jy*omega
+        # f_arr will hopefully be a 2D array of flux profiles for each line for a given molecule? likely will have an issue here w/ wn0 and tau being different shapes
+
+        lineflux_jykms=jnp.sum(f_arr, axis=0)*dv # sum those fluxes for each line
         # dvel=0.1e0    #km/s # constant in Colette's code
+        # using dv instead, in km/sec already
         
-        lineflux[i]=lineflux_jykms*1e-26*1.*1e5*(1./(w0[i]*1e-4))    #mks
+        lineflux[i,:]=lineflux_jykms*1e-26*1.*1e5*(1./(w0*1e-4))    #mks
         #w0=1.e6/wn0
     
-    return lineflux # ??!! Need to somehow make sure the wavelengths of these fluxes match the measured spectrum.
+    return jnp.array(lineflux) # hopefully the integrated line fluxes at each wavelength within obs_wgrid
 compute_lineflux = jax.jit(compute_lineflux)
 
 def compute_fdens_keplerian(distance, fine_wgrid, total_tau, A_au, t_ex, r_in, M_star, inc):

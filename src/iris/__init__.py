@@ -144,12 +144,12 @@ class slab:
                                                  self.T_ex, self.N_mol, self.dV, self.fine_wgrid)
         
         # convolve with instrument psf
-        self.convolve() # !! is this necessary or no? Or should we do this when we calculate the optical depth line profile?
+        #self.convolve() # !! is this necessary or no? Or should we do this when we calculate the optical depth line profile?
         # downsample to grid
         #self.downsample() # here's where carlos's code downsamples to the right wavelength array. I don't think we'll need to do that? 
         # !! Need to make a new downsample() that uses np.where to produce line fluxes? Or, the user can do that once the line fluxes are provided.
-        # routine is, slab.simulate_line_flux(), and then you can call slab.line_fluxes
 
+    
     def simulate_keplerian(self):
         """
         Simulate a convolved and downsampled spectrum including Keplerian line profiles
